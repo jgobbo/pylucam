@@ -1,1 +1,1 @@
-from .lucam import LucamCamera
+from .camera import LucamCamera
