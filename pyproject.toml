@@ -1,0 +1,21 @@
+[project]
+name = "pylucam"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+authors = [
+    { name = "jgobbo", email = "59982706+jgobbo@users.noreply.github.com" }
+]
+requires-python = ">=3.11"
+dependencies = [
+    "cffi>=1.17.1",
+    "numpy>=2.2.5",
+    "opencv-python>=4.11.0.86",
+]
+
+[project.scripts]
+pylucam = "pylucam:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
