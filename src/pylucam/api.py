@@ -1,5 +1,6 @@
 from cffi import FFI
 from pathlib import Path
+from enum import IntEnum
 from typing import Union, TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -303,11 +304,116 @@ class LucamError(Exception):
             Property access failed due to a retry limit.""",
     }
 
-    def __init__(self, source: Union["LucamCamera", None] = None):
-        if source is None:
+    def __init__(self, arg: Union["LucamCamera", int, None] = None):
+        if arg is None:
             self.value = LUCAM_LIB.LucamGetLastError()
+        elif isinstance(arg, int):
+            self.value = arg
         else:
-            self.value = source.get_last_error()
+            self.value = arg.get_last_error()
 
     def __str__(self):
         return self.CODES[self.value]
+
+
+class LucamErrorCode(IntEnum):
+    NoError = 0
+    NoSuchIndex = 1
+    SnapshotNotSupported = 2
+    InvalidPixelFormat = 3
+    SubsamplingZero = 4
+    Busy = 5
+    FailedToSetSubsampling = 6
+    FailedToSetStartPosition = 7
+    PixelFormatNotSupported = 8
+    InvalidFrameFormat = 9
+    PreparationFailed = 10
+    CannotRun = 11
+    NoTriggerControl = 12
+    NoPin = 13
+    NotRunning = 14
+    TriggerFailed = 15
+    CannotSetupFrameFormat = 16
+    DirectShowInitError = 17
+    CameraNotFound = 18
+    Timeout = 19
+    PropertyUnknown = 20
+    PropertyUnsupported = 21
+    PropertyAccessFailed = 22
+    LucustomNotFound = 23
+    PreviewNotRunning = 24
+    LutfNotLoaded = 25
+    DirectShowError = 26
+    NoMoreCallbacks = 27
+    UndeterminedFrameFormat = 28
+    InvalidParameter = 29
+    NotEnoughResources = 30
+    NoSuchConversion = 31
+    ParameterNotWithinBoundaries = 32
+    BadFileIo = 33
+    GdiplusNotFound = 34
+    GdiplusError = 35
+    UnknownFormatType = 36
+    FailedCreateDisplay = 37
+    DpLibNotFound = 38
+    DpCmdNotSupported = 39
+    DpCmdUnknown = 40
+    NotWhilePaused = 41
+    CaptureFailed = 42
+    DpError = 43
+    NoSuchFrameRate = 44
+    InvalidTarget = 45
+    FrameTooDark = 46
+    KsPropertySetNotFound = 47
+    Cancelled = 48
+    KsControlNotSupported = 49
+    EventNotSupported = 50
+    NoPreview = 51
+    SetPositionFailed = 52
+    NoFrameRateList = 53
+    FrameRateInconsistent = 54
+    CameraNotConfiguredForCmd = 55
+    GraphNotReady = 56
+    CallbackSetupError = 57
+    InvalidTriggerMode = 58
+    NotFound = 59
+    EepromTooSmall = 60
+    EepromWriteFailed = 61
+    UnknownFileType = 62
+    EventIdNotSupported = 63
+    EepromCorrupted = 64
+    SectionTooBig = 65
+    FrameTooBright = 66
+    NoCorrectionMatrix = 67
+    UnknownCameraModel = 68
+    ApiTooOld = 69
+    SaturationZero = 70
+    AlreadyInitialised = 71
+    SameInputAndOutputFile = 72
+    FileConversionFailed = 73
+    FileAlreadyConverted = 74
+    PropertyPageNotSupported = 75
+    PropertyPageCreationFailed = 76
+    DirectShowFilterNotInstalled = 77
+    IndividualLutNotAvailable = 78
+    UnexpectedError = 79
+    StreamingStopped = 80
+    MustBeInSwTriggerMode = 81
+    TargetFlaky = 82
+    AutoLensUninitialized = 83
+    LensNotInstalled = 84
+    UnknownError = 85
+    FocusNoFeedbackError = 86
+    LutfTooOld = 87
+    UnknownAviFormat = 88
+    UnknownAviType = 89
+    InvalidAviConversion = 90
+    SeekFailed = 91
+    AviRunning = 92
+    CameraAlreadyOpened = 93
+    NoSubsampledHighRes = 94
+    OnlyOnMonochrome = 95
+    No8bppTo48bpp = 96
+    Lut8Obsolete = 97
+    FunctionNotSupported = 98
+    RetryLimitReached = 99

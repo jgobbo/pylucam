@@ -1,11 +1,12 @@
 import re
 from enum import Enum
 from dataclasses import dataclass
+from warnings import warn
 
 import numpy as np
 from cv2 import cvtColor, COLOR_BAYER_RGGB2RGB
 
-from .api import LUCAM_FFI, LUCAM_LIB, LucamError
+from .api import LUCAM_FFI, LUCAM_LIB, LucamError, LucamErrorCode
 
 
 class LucamProperty(Enum):
@@ -204,7 +205,11 @@ class LucamCamera:
         if not self.lib.LucamOneShotAutoWhiteBalance(
             self._handle, start_x, start_y, width, height
         ):
-            raise LucamError(self)
+            error_code = self.get_last_error()
+            if error_code == LucamErrorCode.FrameTooDark:
+                warn("Whitebalance failed because image is too dark.")
+            else:
+                raise LucamError(error_code)
         if not self.lib.LucamStreamVideoControl(
             self._handle, self.lib.STOP_STREAMING, h_wnd
         ):
