@@ -1,20 +1,38 @@
 import re
-from enum import Enum
+from enum import IntEnum
 from dataclasses import dataclass
 from warnings import warn
 
 import numpy as np
-from cv2 import cvtColor, COLOR_BAYER_RGGB2RGB
+from cv2 import (
+    cvtColor,
+    COLOR_BAYER_RGGB2RGB,
+    COLOR_BAYER_GRBG2RGB,
+    COLOR_BAYER_GBRG2RGB,
+    COLOR_BAYER_BGGR2RGB,
+)
 
 from .api import LUCAM_FFI, LUCAM_LIB, LucamError, LucamErrorCode
 
+__all__ = ["LucamCamera", "LucamProperty"]
 
-class LucamProperty(Enum):
+
+class LucamProperty(IntEnum):
     gain = LUCAM_LIB.LUCAM_PROP_GAIN
     gain_red = LUCAM_LIB.LUCAM_PROP_GAIN_RED
     gain_blue = LUCAM_LIB.LUCAM_PROP_GAIN_BLUE
     gain_green1 = LUCAM_LIB.LUCAM_PROP_GAIN_GREEN1
     gain_green2 = LUCAM_LIB.LUCAM_PROP_GAIN_GREEN2
+
+    color_format = LUCAM_LIB.LUCAM_PROP_COLOR_FORMAT
+
+
+class ColorFormat(IntEnum):
+    MONO = LUCAM_LIB.LUCAM_CF_MONO
+    RGGB = LUCAM_LIB.LUCAM_CF_BAYER_RGGB
+    GRBG = LUCAM_LIB.LUCAM_CF_BAYER_GRBG
+    GBRG = LUCAM_LIB.LUCAM_CF_BAYER_GBRG
+    BGGR = LUCAM_LIB.LUCAM_CF_BAYER_BGGR
 
 
 @dataclass
@@ -40,6 +58,7 @@ class Format:
         return cls(**kwargs)
 
     def as_lucam(self):
+        """Create and populate a LUCAM_FRAME_FORMAT from self"""
         lucam_frame_format = LUCAM_FFI.new("LUCAM_FRAME_FORMAT *")
 
         for attr in self.__annotations__:
@@ -56,23 +75,21 @@ class Snapshot:
     gainBlue: float
     gainGrn1: float
     gainGrn2: float
-    # useStrobe: bool
-    # strobeDelay: float
-    # useHwTrigger: bool
     timeout: float
     format: Format
-    # shutterType: int
-    # exposureDelay: float
 
     @classmethod
     def from_lucam(cls, lucam_snapshot):
         kwargs = {}
         for attr in cls.__annotations__:
-            kwargs[attr] = getattr(lucam_snapshot, attr)
-
+            value = getattr(lucam_snapshot, attr)
+            if attr == "format":
+                value = Format.from_lucam(value)
+            kwargs[attr] = value
         return cls(**kwargs)
 
     def as_lucam(self):
+        """Create and populate a LUCAM_SNAPSHOT from self"""
         lucam_snapshot = LUCAM_FFI.new("LUCAM_SNAPSHOT *")
         for attr in self.__annotations__:
             value = getattr(self, attr)
@@ -99,12 +116,28 @@ class LucamCamera:
         self.get_format()
         self.get_default_snapshot()
 
+        color_format = self.get_property(LucamProperty.color_format)
+        self.color_conversion_code = {
+            ColorFormat.MONO: None,
+            ColorFormat.RGGB: COLOR_BAYER_RGGB2RGB,
+            ColorFormat.GRBG: COLOR_BAYER_GRBG2RGB,
+            ColorFormat.GBRG: COLOR_BAYER_GBRG2RGB,
+            ColorFormat.BGGR: COLOR_BAYER_BGGR2RGB,
+        }[color_format]
+
+    def __del__(self):
+        self.lib.LucamCameraClose(self._handle)
+
     def get_last_error(self):
         return self.lib.LucamGetLastErrorForCamera(self._handle)
 
     def _property_value(self, property: LucamProperty | int | str) -> int:
-        if isinstance(property, LucamProperty):
-            property = property.value
+        """
+        Generate the corresponding integer for the provided Lucam property.
+
+        If a string is provided, it must match the name of a property following
+        `LUCAM_PROP_` but isn't case sensitive.
+        """
         if isinstance(property, str):
             if "_" not in property:
                 property = "_".join(re.sub(r"([A-Z])", r" \1", property).split())
@@ -149,7 +182,7 @@ class LucamCamera:
             if property == "format":
                 value = self.get_format()
             elif property == "timeout":
-                value = 100
+                value = 150
             elif "Grn" in property:
                 value = self.get_property(property.replace("Grn", "Green"))
             else:
@@ -170,6 +203,11 @@ class LucamCamera:
             raise LucamError(self)
         self.fast_frames_enabled = False
 
+    def reset_fast_frames(self) -> None:
+        """Disable and re-enable fast frames to reset the active snapshot."""
+        self.disable_fast_frames()
+        self.enable_fast_frames()
+
     def take_fast_frame(self) -> np.ndarray:
         frame = np.ndarray((self.height, self.width), dtype=np.uint8)
         frame = np.ascontiguousarray(frame)
@@ -183,40 +221,45 @@ class LucamCamera:
 
         I couldn't get the api `ConvertFrameToRgb24` to work.
         """
-        return cvtColor(frame, COLOR_BAYER_RGGB2RGB)
+        return cvtColor(frame, self.color_conversion_code)
 
     def take_fast_frame_rgb(self) -> np.ndarray:
         return self.convert_frame_to_rgb(self.take_fast_frame())
 
     def white_balance(
-        self, start_x: int = 0, start_y: int = 0, width: int = None, height: int = None
+        self,
+        start_x: int = 0,
+        start_y: int = 0,
+        width: int = None,
+        height: int = None,
+        red_over_green: float = 1.0,
+        blue_over_green: float = 1.0,
     ) -> None:
         width = self.width if width is None else width
         height = self.height if height is None else height
 
-        if self.fast_frames_enabled:
-            self.disable_fast_frames()
-
-        h_wnd = self.ffi.new("HWND *")
-        if not self.lib.LucamStreamVideoControl(
-            self._handle, self.lib.START_STREAMING, h_wnd
-        ):
-            raise LucamError(self)
-        if not self.lib.LucamOneShotAutoWhiteBalance(
-            self._handle, start_x, start_y, width, height
+        snapshot = self.snapshot.as_lucam()
+        frame = self.take_fast_frame()
+        if not self.lib.LucamAdjustWhiteBalanceFromSnapshot(
+            self._handle,
+            snapshot,
+            self.ffi.from_buffer(frame),
+            red_over_green,
+            blue_over_green,
+            start_x,
+            start_y,
+            width,
+            height,
         ):
             error_code = self.get_last_error()
             if error_code == LucamErrorCode.FrameTooDark:
-                warn("Whitebalance failed because image is too dark.")
+                warn("Whitebalance failed because the image is too dark.")
+            elif error_code == LucamErrorCode.FrameTooBright:
+                warn("Whitebalance failed because the image is too bright")
             else:
                 raise LucamError(error_code)
-        if not self.lib.LucamStreamVideoControl(
-            self._handle, self.lib.STOP_STREAMING, h_wnd
-        ):
-            raise LucamError(self)
-        self.get_default_snapshot()
-
-        self.enable_fast_frames()
+        else:
+            self.snapshot = Snapshot.from_lucam(snapshot)
 
     def camera_close(self):
         if not self.lib.LucamCameraClose(self._handle):
