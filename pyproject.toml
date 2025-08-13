@@ -1,10 +1,13 @@
 [project]
 name = "pylucam"
-version = "0.1.0"
-description = "Add your description here"
+version = "1.0.0"
+description = "Python wrapper for Lumenera Lucam API"
 readme = "README.md"
+keywords = ["python", "lucam", "lumenera", "camera", "api", "driver"]
+license = "GPL-3.0-only"
+license-files = ["LICENSE"]
 authors = [
-    { name = "jgobbo", email = "59982706+jgobbo@users.noreply.github.com" }
+    { name = "Jacob Gobbo", email = "gobbo.jacob@gmail.com" }
 ]
 requires-python = ">=3.11"
 dependencies = [
@@ -13,8 +16,8 @@ dependencies = [
     "opencv-python>=4.11.0.86",
 ]
 
-[project.scripts]
-pylucam = "pylucam:main"
+[project.urls]
+Repository = "https://github.com/jgobbo/pylucam"
 
 [build-system]
 requires = ["hatchling"]
