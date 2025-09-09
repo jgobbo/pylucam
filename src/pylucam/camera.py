@@ -1,7 +1,7 @@
 import re
 from enum import IntEnum
 from dataclasses import dataclass
-from warnings import warn
+from logging import warning
 
 import numpy as np
 from cv2 import (
@@ -113,6 +113,9 @@ class LucamCamera:
 
     def __init__(self, number: int = 1):
         self._handle = self.lib.LucamCameraOpen(number)
+        if self._handle == self.ffi.NULL:
+            raise ConnectionError(f"Lucam camera number {number} failed to open.")
+
         self.get_format()
         self.get_default_snapshot()
 
@@ -253,9 +256,9 @@ class LucamCamera:
         ):
             error_code = self.get_last_error()
             if error_code == LucamErrorCode.FrameTooDark:
-                warn("Whitebalance failed because the image is too dark.")
+                warning("Whitebalance failed because the image is too dark.")
             elif error_code == LucamErrorCode.FrameTooBright:
-                warn("Whitebalance failed because the image is too bright")
+                warning("Whitebalance failed because the image is too bright")
             else:
                 raise LucamError(error_code)
         else:
